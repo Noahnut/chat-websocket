@@ -30,4 +30,12 @@ deps:
 # Default target
 default: build
 
+docker-build:
+	docker build -f ./docker/Dockerfile . -t chat-ws
+
+docker-run:
+	docker run -p 8080:8080 chat-ws
+
+
+
 .PHONY: build clean test deps
