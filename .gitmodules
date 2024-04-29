@@ -1,0 +1,3 @@
+[submodule "chat-protobuf"]
+	path = chat-protobuf
+	url = https://github.com/Noahnut/chat-protobuf
