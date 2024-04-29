@@ -36,6 +36,8 @@ docker-build:
 docker-run:
 	docker run -p 8080:8080 chat-ws
 
+gen-proto:
+	protoc  --go_out=./models --go_opt=paths=source_relative ./chat-protobuf/*.proto
 
 
 .PHONY: build clean test deps

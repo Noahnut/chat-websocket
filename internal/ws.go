@@ -4,8 +4,10 @@ import (
 	"chat-websocket/queue"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 )
 
@@ -13,6 +15,9 @@ type WebSocketConns struct {
 	upgrader   websocket.Upgrader
 	msgHandler *handler
 }
+
+var once sync.Once
+var requestValidator *validator.Validate
 
 func NewWebSocketConns(readBufferSize, writeBuffSize int, q queue.IQueue) *WebSocketConns {
 
@@ -38,11 +43,15 @@ func (w *WebSocketConns) WebSocketConn(c *gin.Context) {
 	}
 	defer conn.Close()
 
+	once.Do(func() {
+		requestValidator = validator.New()
+	})
+
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			log.Println(err)
-			return
+			continue
 		}
 
 		resp, err := w.msgHandler.messageHandler(msg)
