@@ -20,16 +20,19 @@ func NewHandler(q queue.IQueue) *handler {
 	}
 }
 
-func (h *handler) messageHandler(msg []byte) ([]byte, error) {
+func (h *handler) messageHandler(msg []byte) []byte {
 	messageReq := models.MessageRequest{}
+
+	resp := models.MessageResponse{}
+
 	if err := json.Unmarshal(msg, &messageReq); err != nil {
 		log.Println(err)
-		return nil, err
+		return resp.ServerErrorResponse()
 	}
 
 	if err := requestValidator.Struct(messageReq); err != nil {
 		log.Println(err)
-		return nil, err
+		return nil
 	}
 
 	proto_message := chat_protobuf.Message{
@@ -42,12 +45,13 @@ func (h *handler) messageHandler(msg []byte) ([]byte, error) {
 	protoByte, err := proto.Marshal(&proto_message)
 
 	if err != nil {
-		return nil, err
+		return resp.ServerErrorResponse()
 	}
 
 	if err := h.q.Publish(h.q.GetTextMessageSubject(), protoByte); err != nil {
 		log.Println(err)
+		return resp.ServerErrorResponse()
 	}
 
-	return msg, nil
+	return resp.SuccessResponse()
 }

@@ -51,15 +51,10 @@ func (w *WebSocketConns) WebSocketConn(c *gin.Context) {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			log.Println(err)
-			continue
+			return
 		}
 
-		resp, err := w.msgHandler.messageHandler(msg)
-
-		if err != nil {
-			log.Println(err)
-			continue
-		}
+		resp := w.msgHandler.messageHandler(msg)
 
 		err = conn.WriteMessage(websocket.TextMessage, resp)
 

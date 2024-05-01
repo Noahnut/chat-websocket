@@ -1,5 +1,10 @@
 package models
 
+import (
+	"encoding/json"
+	"net/http"
+)
+
 type MessageRequest struct {
 	Type      int    `json:"type" validate:"required"`
 	Target    string `json:"target" validate:"required"`
@@ -10,4 +15,22 @@ type MessageRequest struct {
 type MessageResponse struct {
 	Code    int    `json:"code"`
 	Context string `json:"context"`
+}
+
+func (m *MessageResponse) ServerErrorResponse() []byte {
+	m.Code = http.StatusInternalServerError
+	m.Context = "Internal Server Error"
+
+	resp, _ := json.Marshal(m)
+
+	return resp
+}
+
+func (m *MessageResponse) SuccessResponse() []byte {
+	m.Code = http.StatusOK
+	m.Context = "Success"
+
+	resp, _ := json.Marshal(m)
+
+	return resp
 }
