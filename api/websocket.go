@@ -2,7 +2,7 @@ package api
 
 import (
 	"chat-websocket/internal"
-	"chat-websocket/queue"
+	"chat-websocket/streaming"
 	"context"
 	"fmt"
 
@@ -18,15 +18,15 @@ type WebSocketServer struct {
 
 func NewWebSocketServer(ctx context.Context, cancel context.CancelFunc, port int) *WebSocketServer {
 
-	queue := queue.NewNATS("nats://192.168.0.109:30176")
+	streaming := streaming.NewNATS("nats://192.168.0.109:30176")
 
-	if err := queue.Connect(); err != nil {
+	if err := streaming.Connect(); err != nil {
 		panic(err)
 	}
 
 	return &WebSocketServer{
 		port:          port,
-		websocketConn: internal.NewWebSocketConns(1024, 1024, queue),
+		websocketConn: internal.NewWebSocketConns(1024, 1024, streaming),
 	}
 }
 

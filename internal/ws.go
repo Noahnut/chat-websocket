@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"chat-websocket/queue"
+	"chat-websocket/streaming"
 	"log"
 	"net/http"
 	"sync"
@@ -19,7 +19,7 @@ type WebSocketConns struct {
 var once sync.Once
 var requestValidator *validator.Validate
 
-func NewWebSocketConns(readBufferSize, writeBuffSize int, q queue.IQueue) *WebSocketConns {
+func NewWebSocketConns(readBufferSize, writeBuffSize int, q streaming.IStreaming) *WebSocketConns {
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  readBufferSize,

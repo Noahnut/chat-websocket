@@ -3,7 +3,7 @@ package internal
 import (
 	"chat-websocket/models"
 	chat_protobuf "chat-websocket/models/chat-protobuf"
-	"chat-websocket/queue"
+	"chat-websocket/streaming"
 	"encoding/json"
 	"log"
 
@@ -11,10 +11,10 @@ import (
 )
 
 type handler struct {
-	q queue.IQueue
+	q streaming.IStreaming
 }
 
-func NewHandler(q queue.IQueue) *handler {
+func NewHandler(q streaming.IStreaming) *handler {
 	return &handler{
 		q: q,
 	}
@@ -48,7 +48,7 @@ func (h *handler) messageHandler(msg []byte) []byte {
 		return resp.ServerErrorResponse()
 	}
 
-	if err := h.q.Publish(h.q.GetTextMessageSubject(), protoByte); err != nil {
+	if err := h.q.Publish(h.q.GetMessageStoreSubject(), protoByte); err != nil {
 		log.Println(err)
 		return resp.ServerErrorResponse()
 	}
