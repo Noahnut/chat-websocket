@@ -26,6 +26,15 @@ func (m *MessageResponse) ServerErrorResponse() []byte {
 	return resp
 }
 
+func (m *MessageResponse) BadRequestResponse() []byte {
+	m.Code = http.StatusBadRequest
+	m.Context = "Bad Request"
+
+	resp, _ := json.Marshal(m)
+
+	return resp
+}
+
 func (m *MessageResponse) SuccessResponse() []byte {
 	m.Code = http.StatusOK
 	m.Context = "Success"

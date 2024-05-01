@@ -27,10 +27,16 @@ func NewWebSocketServer(ctx context.Context, cancel context.CancelFunc, port int
 	return &WebSocketServer{
 		port:          port,
 		websocketConn: internal.NewWebSocketConns(1024, 1024, streaming),
+		ctx:           ctx,
 	}
 }
 
 func (w *WebSocketServer) Run() {
+
+	middleware := &Middleware{
+		ctx: w.ctx,
+	}
+
 	g := gin.New()
 	g.Use(gin.Logger())
 	g.Use(gin.Recovery())
@@ -40,6 +46,7 @@ func (w *WebSocketServer) Run() {
 	})
 
 	wsGroup := g.Group("/ws")
+	wsGroup.Use(middleware.AuthMiddleware)
 	{
 		wsGroup.GET("/chat", w.websocketConn.WebSocketConn)
 	}

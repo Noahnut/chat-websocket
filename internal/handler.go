@@ -4,6 +4,7 @@ import (
 	"chat-websocket/models"
 	chat_protobuf "chat-websocket/models/chat-protobuf"
 	"chat-websocket/streaming"
+	"context"
 	"encoding/json"
 	"log"
 
@@ -11,35 +12,40 @@ import (
 )
 
 type handler struct {
-	q streaming.IStreaming
+	ctx              context.Context
+	userID           string
+	readSubjectList  []string
+	writeSubjectList []string
+	q                streaming.IStreaming
 }
 
-func NewHandler(q streaming.IStreaming) *handler {
+func NewHandler(ctx context.Context, q streaming.IStreaming, userID string, readSubjectList, writeSubjectList []string) *handler {
 	return &handler{
-		q: q,
+		userID:           userID,
+		readSubjectList:  readSubjectList,
+		writeSubjectList: writeSubjectList,
+		q:                q,
 	}
 }
 
 func (h *handler) messageHandler(msg []byte) []byte {
-	messageReq := models.MessageRequest{}
+	req, resp := models.MessageRequest{}, models.MessageResponse{}
 
-	resp := models.MessageResponse{}
-
-	if err := json.Unmarshal(msg, &messageReq); err != nil {
+	if err := json.Unmarshal(msg, &req); err != nil {
 		log.Println(err)
-		return resp.ServerErrorResponse()
+		return resp.BadRequestResponse()
 	}
 
-	if err := requestValidator.Struct(messageReq); err != nil {
+	if err := requestValidator.Struct(req); err != nil {
 		log.Println(err)
-		return nil
+		return resp.BadRequestResponse()
 	}
 
 	proto_message := chat_protobuf.Message{
-		Type:      chat_protobuf.MessageType(messageReq.Type),
-		Content:   messageReq.Context,
-		Timestamp: messageReq.Timestamp,
-		Target:    messageReq.Target,
+		Type:      chat_protobuf.MessageType(req.Type),
+		Content:   req.Context,
+		Timestamp: req.Timestamp,
+		Target:    req.Target,
 	}
 
 	protoByte, err := proto.Marshal(&proto_message)
@@ -48,9 +54,11 @@ func (h *handler) messageHandler(msg []byte) []byte {
 		return resp.ServerErrorResponse()
 	}
 
-	if err := h.q.Publish(h.q.GetMessageStoreSubject(), protoByte); err != nil {
-		log.Println(err)
-		return resp.ServerErrorResponse()
+	for _, subject := range h.writeSubjectList {
+		if err := h.q.Publish(subject, protoByte); err != nil {
+			log.Println(err)
+			return resp.ServerErrorResponse()
+		}
 	}
 
 	return resp.SuccessResponse()
