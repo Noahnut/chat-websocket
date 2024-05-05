@@ -28,6 +28,10 @@ func NewHandler(ctx context.Context, q streaming.IStreaming, userID string, read
 	}
 }
 
+func (h *handler) subscribeMessageHandler(msg []byte) {
+	println(string(msg))
+}
+
 func (h *handler) messageHandler(msg []byte) []byte {
 	req, resp := models.MessageRequest{}, models.MessageResponse{}
 

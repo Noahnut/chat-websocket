@@ -21,7 +21,9 @@ type WebSocketConns struct {
 var once sync.Once
 var requestValidator *validator.Validate
 
-func NewWebSocketConns(readBufferSize, writeBuffSize int, q streaming.IStreaming) *WebSocketConns {
+const streamAddr = "nats://192.168.0.109:30176"
+
+func NewWebSocketConns(readBufferSize, writeBuffSize int) *WebSocketConns {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  readBufferSize,
 		WriteBufferSize: writeBuffSize,
@@ -32,8 +34,7 @@ func NewWebSocketConns(readBufferSize, writeBuffSize int, q streaming.IStreaming
 	}
 
 	return &WebSocketConns{
-		upgrader:  upgrader,
-		streaming: q,
+		upgrader: upgrader,
 	}
 }
 
@@ -65,12 +66,26 @@ func (w *WebSocketConns) WebSocketConn(c *gin.Context) {
 		requestValidator = validator.New()
 	})
 
-	readSubjectList := []string{w.streaming.GetMessageStoreSubject()}
-	writeSubjectList := []string{w.streaming.GetMessageStoreSubject()}
+	streaming := streaming.IStreaming(streaming.NewNATS(streamAddr))
 
-	messageHandler := NewHandler(ctx, w.streaming, userID.(string), readSubjectList, writeSubjectList)
+	if err = streaming.Connect(); err != nil {
+		log.Println(err)
+		return
+	}
+
+	readSubjectList := []string{streaming.GetPrivateMessageSubject(userID.(string))}
+	writeSubjectList := []string{streaming.GetMessageStoreSubject()}
+
+	messageHandler := NewHandler(ctx, streaming, userID.(string), readSubjectList, writeSubjectList)
 
 	conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
+
+	for _, subject := range readSubjectList {
+		if err = streaming.Subscribe(subject, messageHandler.subscribeMessageHandler); err != nil {
+			log.Println(err)
+			return
+		}
+	}
 
 	for {
 		select {
