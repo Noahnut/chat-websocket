@@ -66,7 +66,7 @@ func (w *WebSocketConns) WebSocketConn(c *gin.Context) {
 		requestValidator = validator.New()
 	})
 
-	streaming := streaming.IStreaming(streaming.NewNATS(streamAddr))
+	streaming := streaming.IStreaming(streaming.NewNATS(ctx, streamAddr))
 
 	if err = streaming.Connect(); err != nil {
 		log.Println(err)
@@ -76,7 +76,7 @@ func (w *WebSocketConns) WebSocketConn(c *gin.Context) {
 	readSubjectList := []string{streaming.GetPrivateMessageSubject(userID.(string))}
 	writeSubjectList := []string{streaming.GetMessageStoreSubject()}
 
-	messageHandler := NewHandler(ctx, streaming, userID.(string), readSubjectList, writeSubjectList)
+	messageHandler := NewHandler(ctx, conn, streaming, userID.(string), readSubjectList, writeSubjectList)
 
 	conn.SetReadDeadline(time.Now().Add(5 * time.Minute))
 

@@ -26,9 +26,9 @@ func (m *Middleware) AuthMiddleware(ctx *gin.Context) {
 		return
 	}
 	tokenString = tokenString[len("Bearer "):]
-
+	// TODO: add secret to env
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte("c79ad6f88197be0d2a890f890cab101b837db348ba501723c962176fb54d280d"), nil
+		return []byte("secret"), nil
 	})
 
 	if err != nil {
@@ -61,8 +61,6 @@ func (m *Middleware) AuthMiddleware(ctx *gin.Context) {
 
 	ctx.Set("uid", fmt.Sprint(claims["uid"]))
 	ctx.Set("context", m.ctx)
-
-	print("uid: ", fmt.Sprint(claims["uid"]))
 
 	ctx.Next()
 }

@@ -8,19 +8,23 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
 
 type handler struct {
 	ctx              context.Context
+	wsConn           *websocket.Conn
 	userID           string
 	readSubjectList  []string
 	writeSubjectList []string
 	q                streaming.IStreaming
 }
 
-func NewHandler(ctx context.Context, q streaming.IStreaming, userID string, readSubjectList, writeSubjectList []string) *handler {
+func NewHandler(ctx context.Context, conn *websocket.Conn, q streaming.IStreaming, userID string, readSubjectList, writeSubjectList []string) *handler {
 	return &handler{
+		ctx:              ctx,
+		wsConn:           conn,
 		userID:           userID,
 		readSubjectList:  readSubjectList,
 		writeSubjectList: writeSubjectList,
@@ -29,7 +33,9 @@ func NewHandler(ctx context.Context, q streaming.IStreaming, userID string, read
 }
 
 func (h *handler) subscribeMessageHandler(msg []byte) {
-	println(string(msg))
+	if err := h.wsConn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		log.Println(err)
+	}
 }
 
 func (h *handler) messageHandler(msg []byte) []byte {
