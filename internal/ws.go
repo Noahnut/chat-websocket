@@ -21,7 +21,7 @@ type WebSocketConns struct {
 var once sync.Once
 var requestValidator *validator.Validate
 
-const streamAddr = "nats://192.168.0.109:30176"
+const streamAddr = "nats://192.168.0.109:30270"
 
 func NewWebSocketConns(readBufferSize, writeBuffSize int) *WebSocketConns {
 	upgrader := websocket.Upgrader{
@@ -66,7 +66,7 @@ func (w *WebSocketConns) WebSocketConn(c *gin.Context) {
 		requestValidator = validator.New()
 	})
 
-	streaming := streaming.IStreaming(streaming.NewNATS(ctx, streamAddr))
+	streaming := streaming.IStreaming(streaming.NewNATS(ctx, userID.(string), streamAddr))
 
 	if err = streaming.Connect(); err != nil {
 		log.Println(err)

@@ -2,10 +2,12 @@ package streaming
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -21,20 +23,22 @@ const (
 
 type NATS struct {
 	ctx            context.Context
+	uid            string
 	mutex          sync.RWMutex
 	natsAddr       string
 	conn           *nats.Conn
-	jetStream      nats.JetStreamContext
+	jetStream      jetstream.JetStream
 	subjectHandler map[string]subscribeCallback
-	ch             chan *nats.Msg
+	consumer       jetstream.Consumer
+	consumerConfig jetstream.ConsumerConfig
 }
 
-func NewNATS(ctx context.Context, natsAddr string) *NATS {
+func NewNATS(ctx context.Context, uid, natsAddr string) *NATS {
 	return &NATS{
 		ctx:            ctx,
 		natsAddr:       natsAddr,
+		uid:            uid,
 		subjectHandler: make(map[string]subscribeCallback),
-		ch:             make(chan *nats.Msg, 1),
 	}
 }
 
@@ -45,7 +49,7 @@ func (n *NATS) Connect() error {
 		return err
 	}
 
-	jetStream, err := conn.JetStream()
+	jetStream, err := jetstream.New(conn)
 
 	if err != nil {
 		return err
@@ -55,42 +59,47 @@ func (n *NATS) Connect() error {
 	n.jetStream = jetStream
 
 	// TODO: move to jetStream Init and config
-	message_store_config := &nats.StreamConfig{
+	message_store_config := jetstream.StreamConfig{
 		Name:      MESSAGE_STREAM_STORE_NAME,
 		Subjects:  []string{MESSAGE_STREAM_STORE_SUBJECT},
-		Retention: nats.WorkQueuePolicy,
-		Discard:   nats.DiscardOld,
+		Retention: jetstream.WorkQueuePolicy,
+		Discard:   jetstream.DiscardOld,
 		Replicas:  3,
 	}
 
-	if _, err := n.jetStream.StreamInfo(MESSAGE_STREAM_STORE_NAME); err != nil {
-		if _, err := n.jetStream.AddStream(message_store_config); err != nil {
-			return err
-		}
-	} else {
-		if _, err := n.jetStream.UpdateStream(message_store_config); err != nil {
-			return err
-		}
+	if _, err := n.jetStream.CreateOrUpdateStream(n.ctx, message_store_config); err != nil {
+		return err
 	}
 
-	message_config := &nats.StreamConfig{
+	message_config := jetstream.StreamConfig{
 		Name:      MESSAGE_STREAM_NAME,
 		Subjects:  []string{MESSAGE_STREAM_SUBJECT_WILDCARD},
-		Retention: nats.LimitsPolicy,
-		Discard:   nats.DiscardOld,
+		Retention: jetstream.LimitsPolicy,
+		Discard:   jetstream.DiscardOld,
 		MaxAge:    60 * time.Minute,
 		Replicas:  3,
 	}
 
-	if _, err := n.jetStream.StreamInfo(MESSAGE_STREAM_NAME); err != nil {
-		if _, err := n.jetStream.AddStream(message_config); err != nil {
-			return err
-		}
-	} else {
-		if _, err := n.jetStream.UpdateStream(message_config); err != nil {
-			return err
-		}
+	if _, err := n.jetStream.CreateOrUpdateStream(n.ctx, message_config); err != nil {
+		return err
 	}
+
+	consumerConfig := jetstream.ConsumerConfig{
+		AckPolicy:      jetstream.AckExplicitPolicy,
+		Durable:        n.uid,
+		Name:           n.uid,
+		FilterSubjects: []string{MESSAGE_STREAM_SUBJECT_TEMP + n.uid},
+	}
+
+	n.consumerConfig = consumerConfig
+
+	consumer, err := n.jetStream.CreateOrUpdateConsumer(n.ctx, MESSAGE_STREAM_NAME, consumerConfig)
+
+	if err != nil {
+		return err
+	}
+
+	n.consumer = consumer
 
 	go n.subscribeRoutine()
 
@@ -98,19 +107,35 @@ func (n *NATS) Connect() error {
 }
 
 func (n *NATS) subscribeRoutine() {
+
 	for {
 		select {
 		case <-n.ctx.Done():
 			return
-		case msg := <-n.ch:
-			n.mutex.RLock()
-			callback, ok := n.subjectHandler[msg.Subject]
-			n.mutex.RUnlock()
+		default:
+			msg, err := n.consumer.Fetch(10)
 
-			if ok {
-				callback(msg.Data)
-				msg.Ack()
+			if err != nil {
+				log.Println(err)
+				continue
 			}
+
+			for m := range msg.Messages() {
+				n.mutex.RLock()
+				callback, ok := n.subjectHandler[m.Subject()]
+
+				n.mutex.RUnlock()
+
+				m.Ack()
+
+				if !ok {
+					continue
+				}
+
+				callback(m.Data())
+
+			}
+
 		}
 	}
 }
@@ -120,7 +145,7 @@ func (n *NATS) Close() {
 }
 
 func (n *NATS) Publish(subject string, data []byte) error {
-	if _, err := n.jetStream.Publish(subject, data); err != nil {
+	if _, err := n.jetStream.Publish(n.ctx, subject, data); err != nil {
 		return err
 	}
 
@@ -128,11 +153,14 @@ func (n *NATS) Publish(subject string, data []byte) error {
 }
 
 func (n *NATS) Subscribe(subject string, callback subscribeCallback) error {
+
 	n.mutex.Lock()
 	n.subjectHandler[subject] = callback
 	n.mutex.Unlock()
 
-	if _, err := n.jetStream.ChanSubscribe(subject, n.ch, nats.AckExplicit()); err != nil {
+	n.consumerConfig.FilterSubjects = append(n.consumerConfig.FilterSubjects, subject)
+
+	if _, err := n.jetStream.CreateOrUpdateConsumer(n.ctx, MESSAGE_STREAM_NAME, n.consumerConfig); err != nil {
 		return err
 	}
 
